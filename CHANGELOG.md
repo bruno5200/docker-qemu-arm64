@@ -18,4 +18,8 @@
 
 - added config.env - this makes it much simpler for developers to tweak version numbers
 - fixed issue with alpine for zram
-- updated to alpine-virt-3.14.0-x86_64.iso
+- updated to alpine-virt-3.24.1-x86_64.iso
+
+## 2026/06/07
+
+- updated to alpine-virt-3.24.1-aarch64.iso

@@ -1,6 +1,6 @@
 ###############################################
 #
-# install alpine with docker in qemu x86_64
+# install alpine with docker in qemu aarch64
 #
 
 # Wait enough (forever) until a long-time boot
@@ -39,7 +39,12 @@ spawn qemu-img create -f qcow2 "$env(INSTALLATION_DIR)/alpine.img" $env(DISK_SIZ
 expect "alpine.img"
 
 sleep 5
-spawn qemu-system-x86_64 -machine q35 -m 1024 -smp cpus=2 -cpu qemu64 \
+#spawn qemu-system-x86_64 -machine q35 -m 1024 -smp cpus=2 -cpu qemu64 \
+#   -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
+#   -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
+#   -cdrom "$env(INSTALLATION_DIR)/alpine.iso" \
+#   -nographic "$env(INSTALLATION_DIR)/alpine.img"
+spawn qemu-system-aarch64 -M virt -m 4096 -smp cpus=4 -cpu cortex-a710 \
    -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
    -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
    -cdrom "$env(INSTALLATION_DIR)/alpine.iso" \
@@ -123,7 +128,11 @@ expect "$"
 #
 # setup the system
 #
-spawn qemu-system-x86_64 -machine q35 -m 1024 -smp cpus=2 -cpu qemu64 \
+#spawn qemu-system-x86_64 -machine q35 -m 1024 -smp cpus=2 -cpu qemu64 \
+#   -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
+#   -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
+#   -nographic "$env(INSTALLATION_DIR)/alpine.img"
+spawn qemu-system-aarch64 -M virt -m 4096 -smp cpus=4 -cpu cortex-a710 \
    -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
    -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
    -nographic "$env(INSTALLATION_DIR)/alpine.img"
