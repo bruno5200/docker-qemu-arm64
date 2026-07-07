@@ -8,47 +8,22 @@ set timeout -1
 
 # load the answerfile
 set answerfile [exec cat ./answerfile]
+set qemukey [exec cat /data/data/com.termux/files/home/alpine/qemukey.pub]
 
-# create the install dir
-spawn mkdir -p "$env(INSTALLATION_DIR)"
-
-# copy the scripts to the install dir
-expect "$"
-spawn cp startqemu.sh "$env(INSTALLATION_DIR)"
-
-expect "$"
-spawn cp ssh2qemu.sh "$env(INSTALLATION_DIR)"
-
-spawn curl -v -L -o "$env(INSTALLATION_DIR)/alpine.iso" -C - $env(ALPINE_ISO_URL)
-expect "left intact"
-
-spawn rm -f "$env(INSTALLATION_DIR)/qemukey" "$env(INSTALLATION_DIR)/qemukey.pub"
-expect "$"
-
-spawn ssh-keygen -b 2048 -t rsa -N "" -f "$env(INSTALLATION_DIR)/qemukey"
-expect "\[SHA256\]"
-
-set qemukey [exec cat "$env(INSTALLATION_DIR)/qemukey.pub"]
-
-#
-# install the system
-#
-
-spawn rm -f "$env(INSTALLATION_DIR)/alpine.img"
-spawn qemu-img create -f qcow2 "$env(INSTALLATION_DIR)/alpine.img" $env(DISK_SIZE)
-expect "alpine.img"
-
-sleep 5
 #spawn qemu-system-x86_64 -machine q35 -m 1024 -smp cpus=2 -cpu qemu64 \
 #   -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
 #   -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
 #   -cdrom "$env(INSTALLATION_DIR)/alpine.iso" \
 #   -nographic "$env(INSTALLATION_DIR)/alpine.img"
 spawn qemu-system-aarch64 -M virt -m 4096 -smp cpus=4 -cpu cortex-a710 \
-   -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
+   -drive if=pflash,format=raw,read-only=on,file=/data/data/com.termux/files/usr/share/qemu/edk2-aarch64-code.fd \
    -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
-   -cdrom "$env(INSTALLATION_DIR)/alpine.iso" \
-   -nographic "$env(INSTALLATION_DIR)/alpine.img"
+   -device virtio-scsi-pci,id=scsi0 \
+   -drive file=$env(INSTALLATION_DIR)/alpine.img,if=none,id=hd0,format=qcow2 \
+   -device scsi-hd,drive=hd0,bus=scsi0.0,bootindex=1 \
+   -drive file=$env(INSTALLATION_DIR)/alpine.iso,if=none,id=cd0,media=cdrom,readonly=on \
+   -device scsi-cd,drive=cd0,bus=scsi0.0,bootindex=0 \
+   -nographic
 
 set qemuID $spawn_id
 
@@ -71,16 +46,19 @@ send "sysctl -p\r"
 expect ":~#"
 send "setup-interfaces\r"
 
-expect "\[eth0\]"
+expect "Which one do you want to initialize?"
 send "\r"
 
-expect "\[dhcp\]"
+expect "IPv4 address for eth0?"
 send "\r"
 
-expect "\[no\]"
+expect "IPv6 address for eth0?"
 send "\r"
 
-expect ":~#"
+expect "Do you want to do any manual network configuration?"
+send "\r"
+
+expect -re ".*:~#"
 send "ifup eth0\r"
 
 expect ":~#"
@@ -98,9 +76,26 @@ sleep 3
 
 
 send "cat /root/answerfile\r"
-sleep 3
+sleep 5
 
 expect ":~#"
+send "dd if=/dev/zero of=/dev/sda bs=512 count=1000 conv=notrunc && sync\r"
+sleep 2
+
+expect ":~#"
+send "echo -e 'o\nw' | fdisk /dev/sda && sync\r"
+sleep 2
+
+expect ":~#"
+send "cp /sbin/setup-disk /tmp/setup-disk\r"
+expect ":~#"
+
+send "sed -i 's/! -e \"\${ROOT}sys\\/block\\/\$j\\/device\"/ 1 = 0 /g' /tmp/setup-disk\r"
+expect ":~#"
+
+send "mount --bind /tmp/setup-disk /sbin/setup-disk\r"
+expect ":~#"
+
 send "setup-alpine -f answerfile\r"
 
 expect "password:"
@@ -112,18 +107,20 @@ send "$env(ROOT_PASSWORD)\n"
 expect "Setup a user?"
 send "\r"
 
-expect "Erase the above disk"
-send "y\r"
-
-expect "No error reported."
+expect {
+    "Erase the above disk" {
+        send "y\r"
+        exp_continue
+    }
+    "No error reported." {
+    }
+}
 
 expect "Please reboot"
 
 send "poweroff\r"
-expect ":~#"
 
-# back on console
-expect "$"
+expect eof
 
 #
 # setup the system
@@ -133,9 +130,12 @@ expect "$"
 #   -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
 #   -nographic "$env(INSTALLATION_DIR)/alpine.img"
 spawn qemu-system-aarch64 -M virt -m 4096 -smp cpus=4 -cpu cortex-a710 \
-   -drive if=pflash,format=raw,read-only=on,file=$env(FIRMWARE) \
+   -drive if=pflash,format=raw,read-only=on,file=/data/data/com.termux/files/usr/share/qemu/edk2-aarch64-code.fd \
    -netdev user,id=n1,hostfwd=tcp::2222-:22 -device virtio-net,netdev=n1 \
-   -nographic "$env(INSTALLATION_DIR)/alpine.img"
+   -device virtio-scsi-pci,id=scsi0 \
+   -drive file=$env(INSTALLATION_DIR)/alpine.img,if=none,id=hd0,format=qcow2 \
+   -device scsi-hd,drive=hd0,bus=scsi0.0 \
+   -nographic
 
 set qemuID $spawn_id
 
